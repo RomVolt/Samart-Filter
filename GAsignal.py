@@ -1,22 +1,7 @@
 import string
 import random
-from multiprocessing.dummy import Pool as ThreadPool
+import multiprocessing
 
-
-# class Person(object):
-#     """docstring for Person."""
-#     def __init__(self, PERSON_SIZE):
-#         self.strength = 0
-#         self.DNA      = [None]*PERSON_SIZE
-#         self.DNA_len  = PERSON_SIZE
-#
-#     def updateDNA(self,  mutation_vec, mutation_index):
-#         mutation_vec_size = len(mutation_vec)
-#         end_mutaion_index = mutation_index + mutation_vec_size
-#         if end_index >= self.DNA_len - 1:
-#             mutaion_index = self.DNA_len - mutation_vec_size - 1
-#             end_index = self.DNA_len - 1
-#         self.DNA = self.DNA[:mutation_index] + list(mutation_vec) + self.DNA[end_index:]
 
 
 class GAsignal(object):
@@ -71,6 +56,25 @@ class GAsignal(object):
             - generation_strength: vector avaluatig how much each person close to ideal goal
     @Output - new_generation:        vector with new children for new generation
     """
+    def createNewChild(self, children_num, new_parents, q_new_generation):
+        # for family in range(self.FAMILIES_IN_GENERATION):
+            # for child in range(self.CHILDREN_IN_FAMILY):
+        for child in children_num:
+            p_mutation = random.random()
+            if p_mutation >= 0.5:
+                new_child = self.current_generation[new_parents[0]][0:round(self.PERSON_SIZE/2)] +\
+                            self.current_generation[new_parents[1]][round(self.PERSON_SIZE/2):]
+            else:
+                new_child = self.current_generation[new_parents[1]][0:round(self.PERSON_SIZE/2)] +\
+                            self.current_generation[new_parents[0]][round(self.PERSON_SIZE/2):]
+            if p_mutation <= self.MUTATION_RATE:
+                genom = random.choice(string.printable)
+                mutaion_index = random.randint(0, self.PERSON_SIZE-1)
+                new_child_M = self.insertMutation(new_child, genom, mutaion_index)
+                q_new_generation.put(new_child_M)
+            else:
+                q_new_generation.put(new_child)
+
     def createNewGeneration(self):
         #change evaluation vector to probability value
         eval_sum = sum(self.generation_strength)
@@ -86,24 +90,25 @@ class GAsignal(object):
                 prob_parent[i] += previous_value
                 previous_value  = prob_parent[i]
 
-        new_generation = [None] * self.POPULATION_SIZE
+        # new_generation = [None] * self.POPULATION_SIZE
+        # p = multiprocessing.Process(target=GAsignal.createNewChild, args=(new_parents,))
+        q_new_generation = multiprocessing.Queue()
+        process_list = []
         for family in range(self.FAMILIES_IN_GENERATION):
             new_parents = self.get2parents(prob_parent)
-            for child in range(self.CHILDREN_IN_FAMILY):
-                p_mutation = random.random()
-                if p_mutation >= 0.5:
-                    new_child = self.current_generation[new_parents[0]][0:round(self.PERSON_SIZE/2)] +\
-                                self.current_generation[new_parents[1]][round(self.PERSON_SIZE/2):]
-                else:
-                    new_child = self.current_generation[new_parents[1]][0:round(self.PERSON_SIZE/2)] +\
-                                self.current_generation[new_parents[0]][round(self.PERSON_SIZE/2):]
-                if p_mutation <= self.MUTATION_RATE:
-                    genom = random.choice(string.printable)
-                    mutaion_index = random.randint(0, self.PERSON_SIZE-1)
-                    new_child_M = self.insertMutation(new_child, genom, mutaion_index)
-                    new_generation[child + family*self.CHILDREN_IN_FAMILY] = new_child_M
-                else:
-                    new_generation[child + family*self.CHILDREN_IN_FAMILY] = new_child
+            p = multiprocessing.Process(target=GAsignal.createNewChild, args=(self,range(self.CHILDREN_IN_FAMILY),new_parents,q_new_generation,))
+            p.start()
+            process_list.append(p)
+
+        for i in range(self.FAMILIES_IN_GENERATION):
+            process_list[i].join()
+
+        new_generation = []
+        while not q_new_generation.empty():
+             new_generation.append(q_new_generation.get())
+        # new_generation.append()
+        # print("Fuuuuuck!!!!!!")
+        # print(new_generation)
         return new_generation , self.calcMatch(new_generation)
 
 
