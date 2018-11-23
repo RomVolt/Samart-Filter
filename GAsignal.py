@@ -41,8 +41,9 @@ class GAsignal(object):
     @Input  - goal to reach, current population for evaluation
     @Output - population evaluation vector
     """
-    def calcMatch(self, current_population):
-        return list([sum([1 for a,b in zip(self.TARGET, cp) if a==b]) for cp in current_population])
+
+    def calcMatch(self, current_Persson):
+        return sum([1 for a,b in zip(self.TARGET, current_Persson) if a==b])
 
     def calcMatchCurrentGenration(self):
         return list([sum([1 for a,b in zip(self.TARGET, cp) if a==b]) for cp in self.current_generation])
@@ -71,9 +72,11 @@ class GAsignal(object):
                 genom = random.choice(string.printable)
                 mutaion_index = random.randint(0, self.PERSON_SIZE-1)
                 new_child_M = self.insertMutation(new_child, genom, mutaion_index)
-                q_new_generation.put(new_child_M)
+                child_strength = self.calcMatch(new_child_M)
+                q_new_generation.put([new_child_M, child_strength])
             else:
-                q_new_generation.put(new_child)
+                child_strength = self.calcMatch(new_child)
+                q_new_generation.put([new_child, child_strength])
 
     def createNewGeneration(self):
         #change evaluation vector to probability value
@@ -90,8 +93,6 @@ class GAsignal(object):
                 prob_parent[i] += previous_value
                 previous_value  = prob_parent[i]
 
-        # new_generation = [None] * self.POPULATION_SIZE
-        # p = multiprocessing.Process(target=GAsignal.createNewChild, args=(new_parents,))
         q_new_generation = multiprocessing.Queue()
         process_list = []
         for family in range(self.FAMILIES_IN_GENERATION):
@@ -104,12 +105,12 @@ class GAsignal(object):
             process_list[i].join()
 
         new_generation = []
+        new_generation_strength = []
         while not q_new_generation.empty():
-             new_generation.append(q_new_generation.get())
-        # new_generation.append()
-        # print("Fuuuuuck!!!!!!")
-        # print(new_generation)
-        return new_generation , self.calcMatch(new_generation)
+            Person = q_new_generation.get()
+            new_generation.append(Person[0])
+            new_generation_strength.append(Person[1])
+        return new_generation , new_generation_strength
 
 
     """
@@ -160,13 +161,14 @@ class GAsignal(object):
 
     def updateGeneration(self):
         if self.PERSON_SIZE in self.generation_strength:
+            self.dispCurrentPopulation(self.generation_num)
             return True
         new_generation , new_population_evaluation = self.createNewGeneration()
         self.generation_num += 1
         if max(new_population_evaluation) >= max(self.generation_strength):
             self.current_generation  = new_generation
             self.generation_strength = new_population_evaluation
-        self.dispCurrentPopulation(self.generation_num)
+            self.dispCurrentPopulation(self.generation_num)
         return False
 
     """
@@ -177,11 +179,6 @@ class GAsignal(object):
               generation_num - number to display for analisis
     @Output -
     """
-    def dispPopulation(self, current_population, current_generation_strength, generation_num):
-        population_len = len(current_population)
-        max_strength = max(current_generation_strength)
-        index_person = current_generation_strength.index(max_strength)
-        print("{0} ---\tGeneration {1}{2}\r".format(repr(current_population[index_person]), generation_num, self.CLEAR_SPACE),end="")
 
     def dispCurrentPopulation(self, generation_num):
         max_strength = max(self.generation_strength)
